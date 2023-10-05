@@ -1,6 +1,6 @@
 use futures::stream::BoxStream;
 use std::fs::File;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status, Streaming};
 
@@ -107,7 +107,7 @@ impl FlightService for FlightServiceImpl {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 50051);
+    let addr: SocketAddr = "0.0.0.0:50051".parse().unwrap();
     let service = FlightServiceImpl {};
 
     let svc = FlightServiceServer::new(service);
