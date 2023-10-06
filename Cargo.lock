@@ -876,6 +876,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
+name = "javelin"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "arrow-flight",
+ "futures",
+ "parquet",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1672,18 +1684,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "volley"
-version = "0.1.0"
-dependencies = [
- "arrow",
- "arrow-flight",
- "futures",
- "parquet",
- "tokio",
- "tonic",
-]
 
 [[package]]
 name = "want"
