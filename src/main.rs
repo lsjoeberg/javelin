@@ -49,9 +49,13 @@ impl FlightService for FlightServiceImpl {
 
     async fn do_get(
         &self,
-        _request: Request<Ticket>,
+        request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
-        // TODO: Parse ticket...
+        let ticket = request.into_inner();
+        match std::str::from_utf8(&ticket.ticket) {
+            Ok(t) => println!("Recv ticket: {}", t),
+            Err(e) => println!("{e}"),
+        }
 
         let file = File::open("data/integers.parquet").unwrap();
 
