@@ -1,8 +1,13 @@
 use futures::stream::BoxStream;
-use std::fs::File;
 use std::net::SocketAddr;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status, Streaming};
+
+use datafusion::datasource::file_format::parquet::ParquetFormat;
+use datafusion::datasource::listing::ListingOptions;
+use datafusion::error::Result;
+use datafusion::prelude::*;
+use std::sync::Arc;
 
 use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::error::FlightError;
@@ -12,10 +17,11 @@ use arrow_flight::{
     HandshakeResponse, PutResult, SchemaResult, Ticket,
 };
 use futures::TryStreamExt;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
 #[derive(Clone)]
-pub struct FlightServiceImpl {}
+pub struct FlightServiceImpl {
+    ctx: SessionContext,
+}
 
 #[tonic::async_trait]
 impl FlightService for FlightServiceImpl {
@@ -57,15 +63,19 @@ impl FlightService for FlightServiceImpl {
             Err(e) => println!("{e}"),
         }
 
-        let file = File::open("data/integers.parquet").unwrap();
 
-        let builder = ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
-        println!("Converted arrow schema is: {}", builder.schema());
+        // execute the query
+        let df = match self.ctx.sql("SELECT * FROM nyc").await {
+            Ok(df) => df,
+            Err(e) => return Err(Status::internal(e.to_string())),
+        };
+        let input_stream = df
+            .execute_stream()
+            .await
+            .unwrap()
+            .map_err(|e| FlightError::from(Status::internal(e.to_string())))
+            .into_stream();
 
-        let reader = builder.build().unwrap();
-        let batches = reader.map(|res| res.map_err(FlightError::from));
-
-        let input_stream = futures::stream::iter(batches);
         let flight_data_stream = FlightDataEncoderBuilder::new().build(input_stream);
         Ok(Response::new(Box::pin(
             flight_data_stream.map_err(Status::from),
@@ -111,9 +121,17 @@ impl FlightService for FlightServiceImpl {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr: SocketAddr = "0.0.0.0:50051".parse().unwrap();
-    let service = FlightServiceImpl {};
+    let addr: SocketAddr = "0.0.0.0:50051".parse()?;
 
+    let ctx = SessionContext::new();
+    let file_format = ParquetFormat::default().with_enable_pruning(Some(true));
+    let listing_options = ListingOptions::new(Arc::new(file_format))
+        .with_file_extension(".parquet")
+        .with_collect_stat(true);
+    ctx.register_listing_table("nyc", "./data/nyc", listing_options, None, None)
+        .await?;
+
+    let service = FlightServiceImpl { ctx };
     let svc = FlightServiceServer::new(service);
 
     println!("Starting service on {}", addr);
