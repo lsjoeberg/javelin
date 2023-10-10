@@ -58,14 +58,16 @@ impl FlightService for FlightServiceImpl {
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
         let ticket = request.into_inner();
-        match std::str::from_utf8(&ticket.ticket) {
-            Ok(t) => println!("Recv ticket: {}", t),
-            Err(e) => println!("{e}"),
-        }
-
+        let query = match std::str::from_utf8(&ticket.ticket) {
+            Ok(t) => {
+                println!("Recv ticket: {}", t);
+                t.to_string()
+            }
+            Err(e) => return Err(Status::internal(e.to_string())),
+        };
 
         // execute the query
-        let df = match self.ctx.sql("SELECT * FROM nyc").await {
+        let df = match self.ctx.sql(&query).await {
             Ok(df) => df,
             Err(e) => return Err(Status::internal(e.to_string())),
         };
