@@ -1,11 +1,11 @@
+use arrow::datatypes::SchemaRef;
 use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::error::FlightError;
 use arrow_flight::{
     flight_service_server::FlightService, Action, ActionType, Criteria, Empty, FlightData,
-    FlightDescriptor, FlightInfo, HandshakeRequest, HandshakeResponse, PutResult, SchemaResult,
-    Ticket,
+    FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse, PutResult,
+    SchemaResult, Ticket,
 };
-use datafusion::error::Result;
 use datafusion::prelude::*;
 use futures::stream::BoxStream;
 use futures::TryStreamExt;
@@ -18,6 +18,26 @@ pub struct Javelin {
 impl Javelin {
     pub fn new(ctx: SessionContext) -> Self {
         Self { ctx }
+    }
+
+    pub async fn get_arrow_schema(&self, table: &str) -> Option<SchemaRef> {
+        let sr = self
+            .ctx
+            .catalog("datafusion")?
+            .schema("public")?
+            .table(table)
+            .await?
+            .schema();
+        Some(sr)
+    }
+
+    pub fn get_table_names(&self) -> Option<Vec<String>> {
+        let table_names = self
+            .ctx
+            .catalog("datafusion")?
+            .schema("public")?
+            .table_names();
+        Some(table_names)
     }
 }
 
@@ -35,7 +55,40 @@ impl FlightService for Javelin {
         &self,
         _request: Request<Criteria>,
     ) -> Result<Response<Self::ListFlightsStream>, Status> {
-        Err(Status::unimplemented("Implement list_flights"))
+        let mut info_list: Vec<Result<FlightInfo, Status>> = vec![];
+
+        // Get available tables.
+        let table_names = match self.get_table_names() {
+            Some(names) => names,
+            None => return Err(Status::unavailable("No tables available")),
+        };
+
+        // Create one FlightInfo per table.
+        // TODO: Implement ticketing strategy.
+        for t in table_names {
+            match self.get_arrow_schema(&t).await {
+                Some(s) => match FlightInfo::new().try_with_schema(&s) {
+                    Ok(mut info) => {
+                        info = info
+                            .with_descriptor(FlightDescriptor::new_path(vec![t]))
+                            .with_endpoint(FlightEndpoint::new().with_ticket(Ticket::new("tkt")));
+                        info_list.push(Ok(info))
+                    }
+                    Err(e) => info_list.push(Err(Status::internal(e.to_string()))),
+                },
+                None => info_list.push(Err(Status::internal(format!(
+                    "Failed to get schema for table: {t}"
+                )))),
+            }
+        }
+
+        // Send FlightInfo to stream.
+        if !info_list.is_empty() {
+            let output = futures::stream::iter(info_list);
+            Ok(Response::new(Box::pin(output) as Self::ListFlightsStream))
+        } else {
+            Err(Status::internal("Failed to encode schema"))
+        }
     }
     async fn get_flight_info(
         &self,
