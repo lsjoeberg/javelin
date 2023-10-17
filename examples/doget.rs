@@ -44,25 +44,24 @@ async fn main() {
     let mut record_batch_stream = response.into_stream();
 
     // Iterate over record batches in response stream.
-    let mut n: usize = 0;
+    let mut nrec: usize = 0;
+    let mut nrow: usize = 0;
     let mut schema: Option<SchemaRef> = None;
     let t0 = Instant::now();
     while let Some(b) = record_batch_stream.next().await {
         match b {
             Ok(b) => {
-                if n == 0 {
+                if nrec == 0 {
                     schema = Some(b.schema());
                     println!("recv stream with schema:\n{:#?}", schema)
                 }
-                println!("recv rec {:0>3}: rows: {}", n, b.num_rows());
-                n += 1;
+                println!("recv rec {:0>3}: rows: {}", nrec, b.num_rows());
+                nrec += 1;
+                nrow += b.num_rows();
             }
             Err(e) => eprintln!("{e}"),
         }
     }
-    let elapsed = t0.elapsed().as_secs();
-    println!(
-        "recv {} records in {}s; with schema:\n{:#?}",
-        n, elapsed, schema
-    );
+    let elapsed = t0.elapsed().as_secs_f64();
+    println!("recv {nrec} records, {nrow} rows in {elapsed:.3}s; with schema:\n{schema:#?}");
 }
