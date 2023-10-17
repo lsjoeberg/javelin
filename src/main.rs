@@ -62,7 +62,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = parse_cfg();
 
     let ctx = SessionContext::new();
-    let file_format = ParquetFormat::default().with_enable_pruning(Some(true));
+    let file_format = ParquetFormat::default()
+        .with_enable_pruning(Some(true))
+        .with_skip_metadata(Some(true));
     let listing_options = ListingOptions::new(Arc::new(file_format))
         .with_file_extension(".parquet")
         .with_collect_stat(true);
