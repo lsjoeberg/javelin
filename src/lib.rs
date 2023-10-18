@@ -1,4 +1,3 @@
-use arrow::datatypes::SchemaRef;
 use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::error::FlightError;
 use arrow_flight::{
@@ -6,6 +5,7 @@ use arrow_flight::{
     FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse, PutResult,
     SchemaResult, Ticket,
 };
+use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::prelude::*;
 use futures::stream::BoxStream;
 use futures::TryStreamExt;
