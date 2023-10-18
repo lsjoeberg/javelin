@@ -16,6 +16,12 @@ struct Config {
     /// List of table names to use for each dataset
     #[arg(long, short, num_args = 0..)]
     table_names: Option<Vec<String>>,
+    /// Server address
+    #[arg(long, short = 's', default_value = "0.0.0.0")]
+    host: String,
+    /// Server port
+    #[arg(long, short = 'p', default_value_t = 50051)]
+    port: u16,
 }
 
 fn table_name_from_path(path: &str) -> Option<String> {
@@ -79,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let service = javelin::Javelin::new(ctx);
     let svc = FlightServiceServer::new(service);
 
-    let addr: SocketAddr = "0.0.0.0:50051".parse()?;
+    let addr: SocketAddr = format!("{}:{}", cfg.host, cfg.port).parse()?;
     println!("Starting service on {}", addr);
     Server::builder().add_service(svc).serve(addr).await?;
 
