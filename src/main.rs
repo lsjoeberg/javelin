@@ -10,10 +10,18 @@ use tonic::transport::Server;
 
 use javelin::{cli, flight};
 
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install CTRL+C signal handler");
+    println!("Received CTRL+C: shutting down");
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = cli::Config::parse();
 
+    // Create a DataFusion session context and register tables from sources.
     let ctx = SessionContext::new();
     let file_format = ParquetFormat::default()
         .with_enable_pruning(Some(true))
@@ -29,12 +37,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Registered table '{}' for path '{}'", ts.name, ts.path)
     }
 
-    let service = flight::Javelin::new(ctx);
-    let svc = FlightServiceServer::new(service);
+    // Create Flight service.
+    let javelin = flight::Javelin::new(ctx);
+    let service = FlightServiceServer::new(javelin);
 
+    // Start gRPC server.
     let addr: SocketAddr = format!("{}:{}", cfg.host, cfg.port).parse()?;
     println!("Starting service on {}", addr);
-    Server::builder().add_service(svc).serve(addr).await?;
+    let router = Server::builder().add_service(service);
+
+    router
+        .serve_with_shutdown(addr, async { shutdown_signal().await })
+        .await?;
 
     Ok(())
 }
