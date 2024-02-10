@@ -58,9 +58,8 @@ impl FlightService for Javelin {
         let mut info_list: Vec<Result<FlightInfo, Status>> = vec![];
 
         // Get available tables.
-        let table_names = match self.get_table_names() {
-            Some(names) => names,
-            None => return Err(Status::unavailable("No tables available")),
+        let Some(table_names) = self.get_table_names() else {
+            return Err(Status::unavailable("No tables available"));
         };
 
         // Create one FlightInfo per table.
@@ -72,7 +71,7 @@ impl FlightService for Javelin {
                         info = info
                             .with_descriptor(FlightDescriptor::new_path(vec![t]))
                             .with_endpoint(FlightEndpoint::new().with_ticket(Ticket::new("tkt")));
-                        info_list.push(Ok(info))
+                        info_list.push(Ok(info));
                     }
                     Err(e) => info_list.push(Err(Status::internal(e.to_string()))),
                 },
@@ -83,11 +82,11 @@ impl FlightService for Javelin {
         }
 
         // Send FlightInfo to stream.
-        if !info_list.is_empty() {
+        if info_list.is_empty() {
+            Err(Status::internal("Failed to encode schema"))
+        } else {
             let output = futures::stream::iter(info_list);
             Ok(Response::new(Box::pin(output) as Self::ListFlightsStream))
-        } else {
-            Err(Status::internal("Failed to encode schema"))
         }
     }
     async fn get_flight_info(
@@ -111,7 +110,7 @@ impl FlightService for Javelin {
         let ticket = request.into_inner();
         let query = match std::str::from_utf8(&ticket.ticket) {
             Ok(t) => {
-                println!("Recv ticket: {}", t);
+                println!("Recv ticket: {t}");
                 t.to_string()
             }
             Err(e) => return Err(Status::internal(e.to_string())),
