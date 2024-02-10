@@ -1,8 +1,9 @@
+use std::time::Instant;
+
 use arrow_flight::client::FlightClient;
 use clap::{Parser, ValueEnum};
 use datafusion::arrow::datatypes::SchemaRef;
 use futures::{StreamExt, TryStreamExt};
-use std::time::Instant;
 use tonic::codegen::Bytes;
 use tonic::transport::{Channel, Uri};
 

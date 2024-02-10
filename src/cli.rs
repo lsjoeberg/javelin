@@ -1,15 +1,12 @@
-use std::path::Path;
-
 use clap::Parser;
 
 #[derive(Parser, Debug)]
 pub struct Config {
-    /// List of dataset root paths to serve
-    #[arg(long, short, num_args = 0.., required = true)]
-    pub datasets: Vec<String>,
-    /// List of table names to use for each dataset
-    #[arg(long, short, num_args = 0..)]
-    pub table_names: Option<Vec<String>>,
+    /// List of table sources to load.
+    ///
+    /// Example: table1=./data/weather table2=/mnt/taxi
+    #[arg(long, short, num_args = 1.., value_parser = parse_table_spec)]
+    pub tables: Vec<TableSource>,
     /// Server address
     #[arg(long, short = 's', default_value = "0.0.0.0")]
     pub host: String,
@@ -18,41 +15,21 @@ pub struct Config {
     pub port: u16,
 }
 
-fn table_name_from_path(path: &str) -> Option<String> {
-    let p = Path::new(path);
-    match p.file_stem() {
-        Some(s) => match s.to_ascii_lowercase().into_string() {
-            Ok(s) => Some(s),
-            _ => None,
-        },
-        None => None,
-    }
+#[derive(Debug, Clone)]
+pub struct TableSource {
+    pub name: String,
+    pub path: String,
 }
 
-pub fn parse_cfg() -> Config {
-    let mut cfg = Config::parse();
+fn parse_table_spec(s: &str) -> Result<TableSource, clap::Error> {
+    let Some(pos) = s.find('=') else {
+        return Err(clap::Error::new(clap::error::ErrorKind::ValueValidation));
+    };
 
-    // Dataset paths and table names are pairwise.
-    match &cfg.table_names {
-        Some(names) => {
-            if names.len() != cfg.datasets.len() {
-                eprintln!("must provide exactly one table name for each dataset");
-                std::process::exit(1);
-            }
-        }
-        None => {
-            let mut names: Vec<String> = vec![];
-            for ds in &cfg.datasets {
-                match table_name_from_path(ds) {
-                    Some(t) => names.push(t.to_string()),
-                    None => {
-                        eprintln!("failed to parse table name from path {}", ds);
-                        std::process::exit(1);
-                    }
-                }
-            }
-            cfg.table_names = Some(names);
-        }
-    }
-    cfg
+    let table = TableSource {
+        name: s[..pos].to_string(),
+        path: s[pos + 1..].to_string(),
+    };
+
+    Ok(table)
 }

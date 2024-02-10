@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use arrow_flight::flight_service_server::FlightServiceServer;
+use clap::Parser;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::ListingOptions;
 use datafusion::prelude::SessionContext;
@@ -11,7 +12,7 @@ use javelin::{cli, flight};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = cli::parse_cfg();
+    let cfg = cli::Config::parse();
 
     let ctx = SessionContext::new();
     let file_format = ParquetFormat::default()
@@ -22,10 +23,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_collect_stat(true);
 
     // Register user datasets as tables.
-    for (tn, ds) in cfg.table_names.unwrap().iter().zip(cfg.datasets.iter()) {
-        ctx.register_listing_table(tn, ds, listing_options.clone(), None, None)
+    for ts in cfg.tables {
+        ctx.register_listing_table(&ts.name, &ts.path, listing_options.clone(), None, None)
             .await?;
-        println!("Registered table '{tn}' for dataset '{ds}'")
+        println!("Registered table '{}' for path '{}'", ts.name, ts.path)
     }
 
     let service = flight::Javelin::new(ctx);
