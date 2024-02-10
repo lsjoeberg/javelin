@@ -1,71 +1,17 @@
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use arrow_flight::flight_service_server::FlightServiceServer;
-use clap::Parser;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::ListingOptions;
 use datafusion::prelude::SessionContext;
-use std::net::SocketAddr;
-use std::path::Path;
-use std::sync::Arc;
 use tonic::transport::Server;
 
-#[derive(Parser, Debug)]
-struct Config {
-    /// List of dataset root paths to serve
-    #[arg(long, short, num_args = 0.., required = true)]
-    datasets: Vec<String>,
-    /// List of table names to use for each dataset
-    #[arg(long, short, num_args = 0..)]
-    table_names: Option<Vec<String>>,
-    /// Server address
-    #[arg(long, short = 's', default_value = "0.0.0.0")]
-    host: String,
-    /// Server port
-    #[arg(long, short = 'p', default_value_t = 50051)]
-    port: u16,
-}
-
-fn table_name_from_path(path: &str) -> Option<String> {
-    let p = Path::new(path);
-    match p.file_stem() {
-        Some(s) => match s.to_ascii_lowercase().into_string() {
-            Ok(s) => Some(s),
-            _ => None,
-        },
-        None => None,
-    }
-}
-
-fn parse_cfg() -> Config {
-    let mut cfg = Config::parse();
-
-    // Dataset paths and table names are pairwise.
-    match &cfg.table_names {
-        Some(names) => {
-            if names.len() != cfg.datasets.len() {
-                eprintln!("must provide exactly one table name for each dataset");
-                std::process::exit(1);
-            }
-        }
-        None => {
-            let mut names: Vec<String> = vec![];
-            for ds in &cfg.datasets {
-                match table_name_from_path(ds) {
-                    Some(t) => names.push(t.to_string()),
-                    None => {
-                        eprintln!("failed to parse table name from path {}", ds);
-                        std::process::exit(1);
-                    }
-                }
-            }
-            cfg.table_names = Some(names);
-        }
-    }
-    cfg
-}
+use javelin::{cli, flight};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = parse_cfg();
+    let cfg = cli::parse_cfg();
 
     let ctx = SessionContext::new();
     let file_format = ParquetFormat::default()
@@ -82,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Registered table '{tn}' for dataset '{ds}'")
     }
 
-    let service = javelin::Javelin::new(ctx);
+    let service = flight::Javelin::new(ctx);
     let svc = FlightServiceServer::new(service);
 
     let addr: SocketAddr = format!("{}:{}", cfg.host, cfg.port).parse()?;
